@@ -1,0 +1,186 @@
+---
+import '../styles/global.css';
+import { pillars, pages, url, email, resumePdf } from '../data/site';
+
+interface Props {
+  title?: string;
+  description?: string;
+  current?: string;
+}
+
+const {
+  title,
+  description = 'Tyler Martin — investor, builder, athlete, traveler.',
+  current = 'home',
+} = Astro.props;
+const pageTitle = title ? `${title} — Tyler Martin` : 'Tyler Martin';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href={url('/favicon.svg')} />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="wrap bar">
+        <a class="mark" href={url('/')} aria-label="Tyler Martin, home">TM</a>
+        <nav aria-label="Primary">
+          <ul>
+            {
+              [...pillars, ...pages].map((p, i) => (
+                <li class={i === pillars.length ? 'divide' : undefined}>
+                  <a href={url(`/${p.slug}/`)} aria-current={current === p.slug ? 'page' : undefined}>
+                    {p.name}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+        <a class="btn resume" href={url(resumePdf)}>Resume <span aria-hidden="true">↗</span></a>
+      </div>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap foot">
+        <span class="mono">© {new Date().getFullYear()} Tyler Martin</span>
+        <a class="mono" href={`mailto:${email}`}>{email}</a>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  .skip {
+    position: absolute;
+    left: -9999px;
+  }
+  .skip:focus {
+    left: 16px;
+    top: 16px;
+    z-index: 20;
+    background: var(--cream);
+    padding: 8px 12px;
+  }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: color-mix(in srgb, var(--cream) 88%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .bar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: 16px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .mark {
+    justify-self: start;
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 2px solid var(--green);
+    padding-bottom: 1px;
+  }
+
+  nav ul {
+    display: flex;
+    justify-content: flex-end;
+    gap: 22px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  nav a {
+    font-size: 0.92rem;
+    color: var(--ink-soft);
+    text-decoration: none;
+    padding: 6px 0;
+    border-bottom: 1px solid transparent;
+  }
+
+  nav a:hover,
+  nav a[aria-current='page'] {
+    color: var(--ink);
+    border-bottom-color: var(--green);
+  }
+
+  /* A hairline separates the four pillars from Experience / Principles */
+  nav li.divide {
+    border-left: 1px solid var(--rule);
+    padding-left: 22px;
+  }
+
+  .resume {
+    padding: 7px 14px;
+    font-size: 0.72rem;
+  }
+
+  /* Narrow screens: the six links drop below the logo as a 3 x 2 grid,
+     and the header scrolls away instead of sticking. */
+  @media (max-width: 779px) {
+    .site-header {
+      position: static;
+    }
+    .bar {
+      grid-template-columns: 1fr auto;
+      row-gap: 4px;
+      padding-top: 8px;
+      padding-bottom: 6px;
+    }
+    nav {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+    nav ul {
+      display: grid;
+      grid-template-columns: repeat(3, auto);
+      justify-content: space-between;
+      gap: 2px 16px;
+    }
+    nav li.divide {
+      border-left: 0;
+      padding-left: 0;
+    }
+  }
+
+  .site-footer {
+    border-top: 1px solid var(--rule);
+    padding: 28px 0 40px;
+  }
+
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .foot a {
+    text-transform: none;
+    letter-spacing: 0.02em;
+    color: var(--green);
+  }
+</style>

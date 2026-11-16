@@ -1,0 +1,632 @@
+---
+import Base from '../layouts/Base.astro';
+import { countries, stats } from '../data/countries';
+import photos from '../data/photos.json';
+import { url } from '../data/site';
+
+const photoMap = photos as Record<string, string[]>;
+const cover = (slug: string) => (photoMap[slug]?.[0] ? url(`/${photoMap[slug][0]}`) : null);
+const anyMissing = countries.some((c) => c.status === 'visited' && !cover(c.slug));
+---
+
+<Base title="Traveler" current="traveler">
+  <section class="wrap page-head">
+    <span class="eyebrow">04 / Traveler</span>
+    <h1>A traveler,<br /><span class="accent">not a tourist.</span></h1>
+    <dl class="stats">
+      <div><dt>{stats.countries}</dt><dd class="mono">Countries</dd></div>
+      <div><dt>{stats.states}</dt><dd class="mono">U.S. states</dd></div>
+      <div><dt>{stats.upcoming}</dt><dd class="mono">Upcoming</dd></div>
+    </dl>
+  </section>
+
+  <section class="wrap globe-section">
+    <div class="stage" id="stage">
+      <canvas id="globe" aria-label="Globe showing the countries Tyler has visited. Use the trip cards below to explore each one."></canvas>
+
+      <!-- Photo popup, opened by tapping a country on the globe -->
+      <div class="popup" id="popup" hidden>
+        <button class="close" id="popup-close" aria-label="Close">×</button>
+        <div class="popup-photo" id="popup-photo"></div>
+        <div class="popup-text">
+          <strong id="popup-name"></strong>
+          <span class="mono" id="popup-meta"></span>
+        </div>
+      </div>
+    </div>
+
+    <ul class="legend mono">
+      <li><span class="sw visited"></span>Visited</li>
+      <li><span class="sw upcoming"></span>Upcoming</li>
+      <li class="hint">Drag to spin · tap a country</li>
+    </ul>
+  </section>
+
+  <section class="trips">
+    <div class="wrap trips-head">
+      <span class="eyebrow">
+        Trips
+        {anyMissing && <span class="ph">some photos to come</span>}
+      </span>
+    </div>
+    <ul class="row" id="row">
+      {
+        countries.map((c) => (
+          <li>
+            <button class:list={['card', c.status]} data-slug={c.slug} aria-pressed="false">
+              <span class="photo">
+                {cover(c.slug) ? (
+                  <img src={cover(c.slug)} alt={`${c.name}`} loading="lazy" decoding="async" />
+                ) : (
+                  <span class="mono code">{c.iso2}</span>
+                )}
+              </span>
+              <span class="name">{c.name}</span>
+              {c.status === 'upcoming' && <span class="mono meta">Upcoming</span>}
+            </button>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<script>
+  import { geoOrthographic, geoPath, geoGraticule10, geoContains, geoDistance } from 'd3-geo';
+  import { feature } from 'topojson-client';
+  import world from 'world-atlas/countries-110m.json';
+  import { countries } from '../data/countries';
+  import photos from '../data/photos.json';
+  import { url } from '../data/site';
+
+  const canvas = document.getElementById('globe') as HTMLCanvasElement;
+  const stage = document.getElementById('stage')!;
+  const row = document.getElementById('row')!;
+  const popup = document.getElementById('popup')!;
+  const ctx = canvas.getContext('2d')!;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const css = getComputedStyle(document.documentElement);
+  const color = (name: string) => css.getPropertyValue(name).trim();
+  const C = {
+    cream: color('--cream'),
+    ocean: color('--cream-deep'),
+    land: '#cbc6b7',
+    rule: color('--rule'),
+    ink: color('--ink'),
+    inkSoft: color('--ink-soft'),
+    green: color('--green'),
+    bright: color('--green-bright'),
+  };
+
+  // --- Geometry: split the world into "mine" (visited/upcoming) and everything else ---
+  const all = (feature(world as any, (world as any).objects.countries) as any).features as any[];
+  const mineById = new Map(countries.map((c) => [c.id, c]));
+  const shapes = new Map<string, any>(); // slug -> country shape
+  const others: any[] = [];
+  for (const f of all) {
+    const c = mineById.get(String(f.id));
+    if (c) shapes.set(c.slug, f);
+    else others.push(f);
+  }
+  const otherLand = { type: 'FeatureCollection', features: others };
+  const bySlug = new Map(countries.map((c) => [c.slug, c]));
+  // Countries with no shape at this map resolution (Malta, Vatican City) are drawn as dots.
+  const dots = countries.filter((c) => !shapes.has(c.slug));
+  const graticule = geoGraticule10();
+
+  // --- State ---
+  let rotation: [number, number] = [-10, -48]; // opens centred on Europe
+  let selected: string | null = null;
+  let hovered: string | null = null;
+  let size = 0;
+  const projection = geoOrthographic().clipAngle(90).precision(0.3);
+  const path = geoPath(projection, ctx);
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    size = canvas.clientWidth;
+    canvas.width = canvas.height = Math.round(size * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    projection.translate([size / 2, size / 2]).scale(size / 2 - 2);
+    draw();
+  }
+
+  const visible = (c: { center: [number, number] }) =>
+    geoDistance(c.center, [-rotation[0], -rotation[1]]) < Math.PI / 2 - 0.05;
+
+  function draw() {
+    if (!size) return;
+    projection.rotate([rotation[0], rotation[1]]);
+    ctx.clearRect(0, 0, size, size);
+
+    ctx.beginPath();
+    path({ type: 'Sphere' } as any);
+    ctx.fillStyle = C.ocean;
+    ctx.fill();
+
+    ctx.beginPath();
+    path(graticule as any);
+    ctx.strokeStyle = C.rule;
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+
+    // Unvisited land: grey
+    ctx.beginPath();
+    path(otherLand as any);
+    ctx.fillStyle = C.land;
+    ctx.fill();
+    ctx.strokeStyle = C.ocean;
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+
+    // Visited: forest green. Upcoming: cream with a green outline.
+    for (const c of countries) {
+      const shape = shapes.get(c.slug);
+      if (!shape) continue;
+      const active = c.slug === selected || c.slug === hovered;
+      ctx.beginPath();
+      path(shape);
+      if (c.status === 'visited') {
+        ctx.fillStyle = active ? C.bright : C.green;
+        ctx.fill();
+        ctx.strokeStyle = C.ocean;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = active ? '#dcebe0' : C.cream;
+        ctx.fill();
+        ctx.strokeStyle = C.green;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+
+    // Selected country gets an ink outline on top of everything
+    const sel = selected && shapes.get(selected);
+    if (sel) {
+      ctx.beginPath();
+      path(sel);
+      ctx.strokeStyle = C.ink;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+    }
+
+    for (const c of dots) {
+      if (!visible(c)) continue;
+      const p = projection(c.center)!;
+      const active = c.slug === selected || c.slug === hovered;
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], active ? 6 : 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = active ? C.bright : C.green;
+      ctx.fill();
+      ctx.strokeStyle = active ? C.ink : C.cream;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    ctx.beginPath();
+    path({ type: 'Sphere' } as any);
+    ctx.strokeStyle = C.inkSoft;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  // --- Spin to a country ---
+  let anim = 0;
+  function spinTo(center: [number, number]) {
+    cancelAnimationFrame(anim);
+    const from: [number, number] = [rotation[0], rotation[1]];
+    const dLon = ((((-center[0] - from[0]) % 360) + 540) % 360) - 180; // shortest way round
+    const dLat = Math.max(-80, Math.min(80, -center[1])) - from[1];
+    if (reduced) {
+      rotation = [from[0] + dLon, from[1] + dLat];
+      draw();
+      return;
+    }
+    const start = performance.now();
+    const dur = 900;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / dur);
+      const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      rotation = [from[0] + dLon * e, from[1] + dLat * e];
+      draw();
+      if (t < 1) anim = requestAnimationFrame(step);
+    };
+    anim = requestAnimationFrame(step);
+  }
+
+  // --- Selection: the single place where globe, cards and popup are kept in sync ---
+  const cards = [...row.querySelectorAll<HTMLButtonElement>('.card')];
+
+  function select(slug: string | null, opts: { spin?: boolean; popup?: boolean; scroll?: boolean } = {}) {
+    selected = slug;
+    for (const card of cards) {
+      const on = card.dataset.slug === slug;
+      card.classList.toggle('active', on);
+      card.setAttribute('aria-pressed', String(on));
+      if (on && opts.scroll) {
+        row.scrollTo({
+          left: card.offsetLeft - (row.clientWidth - card.offsetWidth) / 2,
+          behavior: reduced ? 'auto' : 'smooth',
+        });
+      }
+    }
+    const c = slug ? bySlug.get(slug) : null;
+    if (c && opts.spin) spinTo(c.center);
+    else draw();
+    if (c && opts.popup) openPopup(c);
+    else popup.hidden = true;
+  }
+
+  function openPopup(c: (typeof countries)[number]) {
+    const src = (photos as Record<string, string[]>)[c.slug]?.[0];
+    const photo = document.getElementById('popup-photo')!;
+    photo.textContent = '';
+    if (src) {
+      const img = new Image();
+      img.src = url(`/${src}`);
+      img.alt = c.name;
+      photo.append(img);
+    } else {
+      const code = document.createElement('span');
+      code.className = 'mono';
+      code.textContent = c.iso2;
+      photo.append(code);
+    }
+    document.getElementById('popup-name')!.textContent = c.name;
+    document.getElementById('popup-meta')!.textContent = c.status === 'upcoming' ? 'Upcoming' : '';
+    popup.hidden = false;
+  }
+
+  document.getElementById('popup-close')!.addEventListener('click', () => select(null));
+
+  // Cards -> globe. Tap, keyboard focus, and (on devices that have it) hover all work.
+  const canHover = matchMedia('(hover: hover)').matches;
+  for (const card of cards) {
+    const slug = card.dataset.slug!;
+    card.addEventListener('click', () => select(slug, { spin: true }));
+    card.addEventListener('focus', () => {
+      if (selected !== slug) select(slug, { spin: true });
+    });
+    if (canHover) {
+      card.addEventListener('mouseenter', () => {
+        if (selected !== slug) select(slug, { spin: true });
+      });
+    }
+  }
+
+  // --- Globe -> cards: which of my countries is under this point? ---
+  function hit(x: number, y: number): string | null {
+    for (const c of dots) {
+      if (!visible(c)) continue;
+      const p = projection(c.center)!;
+      if (Math.hypot(p[0] - x, p[1] - y) < 14) return c.slug;
+    }
+    if (Math.hypot(x - size / 2, y - size / 2) > size / 2) return null;
+    const point = projection.invert!([x, y]);
+    if (!point) return null;
+    for (const [slug, shape] of shapes) if (geoContains(shape, point)) return slug;
+    return null;
+  }
+
+  // --- Drag to spin; a press that barely moves counts as a tap ---
+  let drag: { x: number; y: number; rot: [number, number]; moved: boolean } | null = null;
+  const local = (e: PointerEvent) => {
+    const r = canvas.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top] as const;
+  };
+
+  canvas.addEventListener('pointerdown', (e) => {
+    cancelAnimationFrame(anim);
+    canvas.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, y: e.clientY, rot: [rotation[0], rotation[1]], moved: false };
+    canvas.classList.add('dragging');
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    if (drag) {
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (Math.hypot(dx, dy) > 6) drag.moved = true;
+      if (!drag.moved) return;
+      const k = 75 / (size / 2); // degrees per pixel, so a drag tracks the surface
+      rotation = [drag.rot[0] + dx * k, Math.max(-80, Math.min(80, drag.rot[1] - dy * k))];
+      draw();
+    } else if (e.pointerType === 'mouse') {
+      const h = hit(...local(e));
+      if (h !== hovered) {
+        hovered = h;
+        canvas.classList.toggle('over', !!h);
+        draw();
+      }
+    }
+  });
+
+  const end = (e: PointerEvent, tap: boolean) => {
+    if (!drag) return;
+    const wasTap = tap && !drag.moved;
+    drag = null;
+    canvas.classList.remove('dragging');
+    if (wasTap) {
+      const slug = hit(...local(e));
+      if (slug) select(slug, { spin: true, popup: true, scroll: true });
+      else select(null);
+    }
+  };
+  canvas.addEventListener('pointerup', (e) => end(e, true));
+  canvas.addEventListener('pointercancel', (e) => end(e, false));
+  canvas.addEventListener('pointerleave', () => {
+    if (hovered) {
+      hovered = null;
+      canvas.classList.remove('over');
+      draw();
+    }
+  });
+
+  new ResizeObserver(resize).observe(stage);
+  resize();
+</script>
+
+<style>
+  .page-head {
+    padding-bottom: 40px;
+  }
+
+  .stats {
+    display: flex;
+    gap: 36px;
+    margin: 36px 0 0;
+  }
+  .stats div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stats dt {
+    font-family: var(--mono);
+    font-size: clamp(2rem, 6vw, 3rem);
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    color: var(--green);
+  }
+  .stats dd {
+    margin: 0;
+  }
+
+  .globe-section {
+    padding-bottom: 48px;
+  }
+
+  .stage {
+    position: relative;
+    width: 100%;
+    max-width: 580px;
+    margin: 0 auto;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    cursor: grab;
+    /* horizontal drags spin the globe; vertical swipes still scroll the page on touch screens */
+    touch-action: pan-y;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas.over {
+    cursor: pointer;
+  }
+  canvas.dragging {
+    cursor: grabbing;
+  }
+
+  /* Phones: a compact strip tucked into the globe's empty bottom-left corner,
+     so it does not cover the country it describes. */
+  .popup {
+    position: absolute;
+    left: -6px;
+    bottom: -12px;
+    display: flex;
+    align-items: center;
+    max-width: 240px;
+    background: var(--cream);
+    border: 1px solid var(--ink);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(22, 23, 20, 0.14);
+  }
+  .popup[hidden] {
+    display: none;
+  }
+
+  .popup-photo {
+    flex: none;
+    width: 68px;
+    aspect-ratio: 1;
+    background: var(--cream-deep);
+    display: grid;
+    place-items: center;
+  }
+  .popup-photo :global(img) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .popup-photo :global(.mono) {
+    font-size: 1.1rem;
+    color: var(--ink-faint);
+  }
+
+  /* Wide screens: a larger photo card beside the globe */
+  @media (min-width: 1040px) {
+    .popup {
+      display: block;
+      left: auto;
+      right: -150px;
+      bottom: 24px;
+      width: 230px;
+      max-width: none;
+    }
+    .popup-photo {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+    }
+    .popup-photo :global(.mono) {
+      font-size: 1.6rem;
+    }
+  }
+
+  .popup-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 40px 10px 12px;
+  }
+  .popup-text .mono {
+    font-size: 0.66rem;
+  }
+
+  .close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--cream);
+    color: var(--ink);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 22px;
+    list-style: none;
+    margin: 20px 0 0;
+    padding: 0;
+    font-size: 0.68rem;
+  }
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sw {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+  .sw.visited {
+    background: var(--green);
+  }
+  .sw.upcoming {
+    border: 1.5px solid var(--green);
+  }
+  .hint {
+    color: var(--ink-faint);
+  }
+
+  .trips {
+    border-top: 1px solid var(--rule);
+    padding: 40px 0 88px;
+  }
+
+  .trips-head .eyebrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* Full-bleed swipeable row: it scrolls edge to edge but starts aligned with the page gutter */
+  .row {
+    position: relative;
+    display: flex;
+    gap: 14px;
+    list-style: none;
+    margin: 0;
+    padding: 4px max(var(--gutter), calc((100vw - var(--max)) / 2 + var(--gutter))) 16px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .row li {
+    flex: 0 0 auto;
+    scroll-snap-align: center;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 200px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  @media (min-width: 720px) {
+    .card {
+      width: 232px;
+    }
+  }
+
+  .photo {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 4 / 5;
+    margin-bottom: 9px;
+    background: var(--cream-deep);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    overflow: hidden;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .code {
+    font-size: 2rem;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+  }
+
+  .card.upcoming .photo {
+    background: none;
+    border: 1.5px dashed var(--green);
+  }
+  .card.upcoming .code {
+    color: var(--green);
+  }
+
+  .card.active .photo {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px var(--green);
+  }
+
+  .name {
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .meta {
+    font-size: 0.66rem;
+  }
+</style>

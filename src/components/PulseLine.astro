@@ -1,0 +1,344 @@
+---
+// The Home hero visual: Tyler's LinkedIn banner redrawn as one continuous line
+// (market chart → neural network → heartbeat → flight to a map pin), with a pulse that
+// travels along it. Each quarter of the line sits above its pillar link.
+import { pillars, url } from '../data/site';
+
+// 1. Markets: a rising staircase (x 20–300)
+const markets =
+  'M20 250 L45 236 L60 244 L85 220 L100 230 L125 204 L142 214 L167 186 L184 196 L209 166 L226 176 L250 146 L300 146';
+
+// 2. AI: the line threads through four network nodes (x 300–590)
+const nodes = [
+  [350, 100],
+  [410, 165],
+  [470, 110],
+  [530, 170],
+];
+const ai = nodes.map(([x, y]) => `L${x} ${y}`).join(' ') + ' L575 150 L630 215';
+const extraNodes = [
+  [380, 58],
+  [500, 68],
+  [440, 218],
+];
+const edges = [
+  [350, 100, 380, 58],
+  [380, 58, 500, 68],
+  [500, 68, 470, 110],
+  [350, 100, 470, 110],
+  [410, 165, 530, 170],
+  [410, 165, 440, 218],
+  [440, 218, 530, 170],
+  [500, 68, 575, 150],
+];
+
+// 3. Heartbeat: three ECG complexes on a flat baseline (x 630–900)
+const base = 215;
+const beat = (x: number) =>
+  `L${x - 34} ${base} L${x - 26} ${base - 9} L${x - 18} ${base} L${x - 8} ${base} L${x - 4} ${base + 12} L${x + 3} ${base - 72} L${x + 11} ${base + 20} L${x + 16} ${base} L${x + 28} ${base} L${x + 36} ${base - 11} L${x + 44} ${base}`;
+const heart = [690, 775, 860].map(beat).join(' ');
+
+// 4. Flight: the line runs flat, then lifts off under the plane (x 900–1050)
+const flight = `L1010 ${base} C1030 ${base} 1038 208 1050 196`;
+
+const line = `${markets} ${ai} ${heart} ${flight}`;
+---
+
+<div class="pulse-line">
+  <svg viewBox="0 48 1200 220" role="img" aria-label="One line that becomes a market chart, a neural network, a heartbeat and a flight path">
+    <!-- network scaffolding behind the line -->
+    <g class="net">
+      {edges.map(([x1, y1, x2, y2]) => <line x1={x1} y1={y1} x2={x2} y2={y2} />)}
+      {extraNodes.map(([cx, cy]) => <circle cx={cx} cy={cy} r="4" />)}
+    </g>
+
+    <!-- dotted flight path up to the pin -->
+    <path class="route" d="M1098 166 Q1136 124 1160 120"></path>
+    <g class="pin" transform="translate(1163 116)">
+      <path d="M0 0 C-11 -14 -11 -28 0 -28 C11 -28 11 -14 0 0 Z"></path>
+      <circle cx="0" cy="-18" r="3.5"></circle>
+    </g>
+
+    <!-- the line itself, then the pulse drawn over it -->
+    <path class="track" d={line}></path>
+    <path class="pulse tail" d={line} pathLength="1000"></path>
+    <path class="pulse head" d={line} pathLength="1000"></path>
+
+    <g class="nodes">
+      {nodes.map(([cx, cy]) => <circle cx={cx} cy={cy} r="7" />)}
+    </g>
+
+    <!-- plane, nose toward the pin -->
+    <g class="plane" transform="translate(1070 180) rotate(-36)">
+      <path
+        d="M-30 0 L-38 -12 L-31 -12 L-21 -4 L-5 -4 L-16 -26 L-8 -26 L11 -4 L26 -4 Q35 -4 35 0 Q35 4 26 4 L11 4 L-8 26 L-16 26 L-5 4 L-21 4 L-31 12 L-38 12 Z"
+      ></path>
+    </g>
+  </svg>
+
+  <ul class="pillars">
+    {
+      pillars.map((p) => (
+        <li>
+          <a href={url(`/${p.slug}/`)}>
+            <span class="mono n">{p.n}</span>
+            <span class="name">
+              {p.name} <span class="arrow" aria-hidden="true">→</span>
+            </span>
+            <span class="mono theme">{p.theme}</span>
+            <span class="stat">
+              <strong>{p.stat}</strong> {p.statLabel}
+              {p.placeholder && <span class="ph">placeholder</span>}
+            </span>
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+</div>
+
+<style>
+  .pulse-line {
+    margin-top: 26px;
+  }
+  @media (min-width: 860px) {
+    .pulse-line {
+      margin-top: 44px;
+    }
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .track,
+  .pulse,
+  .route,
+  .net line {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .track {
+    stroke: var(--ink);
+    stroke-width: 2.5;
+  }
+
+  .net line {
+    stroke: var(--ink-faint);
+    stroke-width: 1;
+    opacity: 0.7;
+  }
+  .net circle {
+    fill: var(--green);
+  }
+
+  .nodes circle {
+    fill: var(--cream);
+    stroke: var(--green);
+    stroke-width: 2.5;
+  }
+
+  .route {
+    stroke: var(--green);
+    stroke-width: 2.5;
+    stroke-dasharray: 1 8;
+  }
+
+  .pin path {
+    fill: var(--green);
+  }
+  .pin circle {
+    fill: var(--cream);
+  }
+
+  .plane path {
+    fill: var(--ink);
+    stroke: var(--cream);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+
+  /* The pulse: a short bright head with a longer faint tail, both sliding along
+     the same path. pathLength="1000" makes the dash maths resolution-independent. */
+  .pulse {
+    stroke: var(--green-bright);
+  }
+  .pulse.head {
+    stroke-width: 5;
+    stroke-dasharray: 22 1000;
+    animation: travel-head 1.5s linear infinite;
+  }
+  .pulse.tail {
+    stroke-width: 4;
+    stroke-dasharray: 90 1000;
+    opacity: 0.35;
+    animation: travel-tail 1.5s linear infinite;
+  }
+
+  /* The tail starts 68 units behind so its front edge stays level with the head.
+     Both finish off the end of the line by 85%, then rest before the next beat. */
+  @keyframes travel-head {
+    0% {
+      stroke-dashoffset: 22;
+    }
+    85%,
+    100% {
+      stroke-dashoffset: -1000;
+    }
+  }
+  @keyframes travel-tail {
+    0% {
+      stroke-dashoffset: 90;
+    }
+    85%,
+    100% {
+      stroke-dashoffset: -932;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pulse {
+      display: none;
+    }
+  }
+
+  /* On phones the drawing is ~3.5x smaller, so strokes are thickened to stay visible */
+  @media (max-width: 619px) {
+    .track {
+      stroke-width: 5;
+    }
+    .nodes circle {
+      stroke-width: 5;
+      r: 9;
+    }
+    .pulse.head {
+      stroke-width: 9;
+    }
+    .pulse.tail {
+      stroke-width: 8;
+    }
+    .net line {
+      stroke-width: 2;
+    }
+    .route {
+      stroke-width: 5;
+      stroke-dasharray: 1 12;
+    }
+  }
+
+  .pillars {
+    list-style: none;
+    margin: 22px 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border-top: 2px solid var(--green);
+  }
+
+  .pillars li {
+    border-bottom: 1px solid var(--rule);
+  }
+  .pillars li:nth-child(odd) {
+    border-right: 1px solid var(--rule);
+  }
+
+  .pillars a {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    height: 100%;
+    padding: 12px 12px 13px;
+    color: var(--ink);
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .pillars li:nth-child(odd) a {
+    padding-left: 0;
+  }
+
+  .pillars a:hover,
+  .pillars a:active {
+    background: var(--cream-deep);
+  }
+  .pillars a:hover .name {
+    color: var(--green);
+  }
+
+  .n {
+    color: var(--green);
+  }
+
+  .name {
+    font-size: 1.2rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+
+  .arrow {
+    display: inline-block;
+    color: var(--green);
+    transition: transform 0.15s;
+  }
+  .pillars a:hover .arrow {
+    transform: translateX(4px);
+  }
+
+  .theme {
+    font-size: 0.68rem;
+  }
+
+  .stat {
+    margin-top: 5px;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+  .stat strong {
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 1.05rem;
+    color: var(--green);
+  }
+  .stat .ph {
+    margin-left: 4px;
+  }
+
+  /* Phones: drop the sub-label and placeholder tag so all four boxes fit on the first screen */
+  @media (max-width: 719px) {
+    .theme,
+    .stat .ph {
+      display: none;
+    }
+    .pillars a {
+      padding: 14px 12px 15px;
+    }
+    .stat {
+      margin-top: 1px;
+    }
+  }
+
+  @media (min-width: 720px) {
+    .pillars {
+      grid-template-columns: repeat(4, 1fr);
+    }
+    .pillars li,
+    .pillars li:nth-child(odd) {
+      border-right: 1px solid var(--rule);
+    }
+    .pillars li:last-child {
+      border-right: 0;
+    }
+    .pillars a,
+    .pillars li:nth-child(odd) a {
+      padding: 26px 22px 28px;
+    }
+    .pillars li:first-child a {
+      padding-left: 0;
+    }
+  }
+</style>

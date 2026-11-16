@@ -1,0 +1,282 @@
+---
+import Base from '../layouts/Base.astro';
+import { resume, resumePdf, url } from '../data/site';
+---
+
+<Base title="Experience" current="experience">
+  <section class="wrap page-head">
+    <span class="eyebrow">Resume</span>
+    <h1>Experience<span class="accent">.</span></h1>
+    <a class="btn" href={url(resumePdf)}>Download PDF <span aria-hidden="true">↗</span></a>
+  </section>
+
+  <section class="wrap body">
+    {
+      resume.work.map((job) => (
+        <article class="entry">
+          <div class="entry-top">
+            <h2 class="company">{job.org}</h2>
+            <span class="mono dates">{job.dates}</span>
+          </div>
+          <span class="mono place">{job.place}</span>
+          <div class="roles">
+            {job.roles.map((r, i) => (
+              <div class={`role${i === 0 ? ' current' : ''}`}>
+                <div class="role-top">
+                  <h3>{r.role}</h3>
+                  <span class="mono dates">{r.dates}</span>
+                </div>
+                <ul>
+                  {r.bullets.map((b) => (
+                    <li>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </article>
+      ))
+    }
+
+    <h2 class="group">Education</h2>
+    {
+      resume.education.map((job) => (
+        <article class="entry">
+          <div class="entry-top">
+            <span class="mono org">{job.org}</span>
+            <span class="mono dates">{job.dates}</span>
+          </div>
+          <h3>{job.role}</h3>
+          <span class="mono place">{job.place}</span>
+          <ul>
+            {job.bullets.map((b) => (
+              <li>{b}</li>
+            ))}
+          </ul>
+        </article>
+      ))
+    }
+
+
+    <div class="compact-grid">
+      <div>
+        <h3 class="sub">Case competitions</h3>
+        {
+          resume.competitions.map((c) => (
+            <div class="compact">
+              <div class="entry-top">
+                <span class="mono org">{c.result}</span>
+                <span class="mono dates">{c.year}</span>
+              </div>
+              <p class="c-title">{c.title}</p>
+              <p class="c-note">{c.host}. {c.note}</p>
+            </div>
+          ))
+        }
+      </div>
+      <div>
+        <h3 class="sub">Leadership</h3>
+        {
+          resume.leadership.map((c) => (
+            <div class="compact">
+              <div class="entry-top">
+                <span class="mono org">{c.result}</span>
+                <span class="mono dates">{c.year}</span>
+              </div>
+              <p class="c-title">{c.title}</p>
+              <p class="c-note">{c.host}. {c.note}</p>
+            </div>
+          ))
+        }
+        <h3 class="sub tools">Tools</h3>
+        <ul class="chips">
+          {resume.skills.map((s) => <li class="mono">{s}</li>)}
+        </ul>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .body {
+    padding-bottom: 96px;
+  }
+
+  /* "Education" is the heading of the UConn block: one rule above the heading,
+     none between it and the entry. */
+  .group {
+    font-weight: 700;
+    color: var(--green);
+    border-top: 1px solid var(--rule);
+    padding-top: 36px;
+    margin-bottom: 20px;
+  }
+  .group + .entry {
+    border-top: 0;
+    padding-top: 0;
+  }
+
+  /* Resume entries: org + dates in mono, role as the heading, bullets below */
+  .entry {
+    border-top: 1px solid var(--rule);
+    padding: 28px 0 32px;
+  }
+
+  .entry-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+
+  .org {
+    color: var(--green);
+  }
+
+  .dates {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .place {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.68rem;
+    color: var(--ink-faint);
+  }
+
+  /* Roles at one company: a green line down the left edge joins a dot per role.
+     Newest role on top (filled dot), earlier roles below (open dot). */
+  .roles {
+    margin-top: 22px;
+  }
+  .role {
+    position: relative;
+    padding-left: 26px;
+    padding-bottom: 26px;
+  }
+  .role:last-child {
+    padding-bottom: 0;
+  }
+  .role::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.5em;
+    width: 9px;
+    height: 9px;
+    box-sizing: border-box;
+    border: 1.5px solid var(--green);
+    border-radius: 50%;
+  }
+  .role.current::before {
+    background: var(--green);
+  }
+  .role:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 3.75px;
+    top: calc(0.5em + 9px);
+    bottom: -0.5em;
+    width: 1.5px;
+    background: var(--green);
+  }
+  /* Company name leads the block: larger than the role titles beneath it. */
+  .company {
+    font-size: clamp(1.3rem, 2.6vw, 1.55rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--green);
+  }
+  .role h3 {
+    font-size: 1.02rem;
+  }
+  .role-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+  }
+  .entry .role ul {
+    margin-top: 12px;
+  }
+
+  .entry ul {
+    margin: 18px 0 0;
+    padding: 0;
+    list-style: none;
+    max-width: 78ch;
+  }
+
+  .entry li {
+    position: relative;
+    padding-left: 22px;
+    margin-bottom: 8px;
+    color: var(--ink-soft);
+  }
+
+  .entry li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.8em;
+    width: 10px;
+    height: 1px;
+    background: var(--green);
+  }
+
+  .compact-grid {
+    display: grid;
+    gap: 40px;
+    border-top: 1px solid var(--rule);
+    padding-top: 36px;
+  }
+  @media (min-width: 860px) {
+    .compact-grid {
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+    }
+  }
+
+  .sub {
+    margin-bottom: 8px;
+  }
+  .sub.tools {
+    margin-top: 36px;
+    margin-bottom: 16px;
+  }
+
+  .compact {
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .c-title {
+    font-weight: 500;
+  }
+
+  .c-note {
+    margin-top: 4px;
+    font-size: 0.93rem;
+    color: var(--ink-soft);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .chips li {
+    border: 1px solid var(--green);
+    color: var(--green);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 0.7rem;
+  }
+</style>

@@ -1,0 +1,97 @@
+---
+import Base from '../layouts/Base.astro';
+import { memos } from '../data/site';
+
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<Base title="Investor" current="investor">
+  <section class="wrap page-head">
+    <span class="eyebrow">01 / Investor</span>
+    <h1>Memos<span class="accent">.</span></h1>
+    <p class="lede">He who cannot write, cannot think.</p>
+  </section>
+
+  <section class="wrap body">
+    <ol class="memos">
+      {
+        memos.items.map((m, i) => (
+          <li>
+            <span class="mono num">{pad(i + 1)}</span>
+            <div>
+              <h2>{m.title}</h2>
+              <p>{m.subtitle}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+
+    <p class="note">My employer&rsquo;s policies restrict publishing market commentary. Happy to discuss these in conversation.</p>
+  </section>
+</Base>
+
+<style>
+  .body {
+    padding-bottom: 96px;
+  }
+
+  .ph-line {
+    margin-bottom: 16px;
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+  }
+
+  .memos {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .memos li {
+    display: grid;
+    grid-template-columns: 3.5ch 1fr;
+    gap: 16px;
+    align-items: baseline;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .num {
+    color: var(--green);
+  }
+
+  .memos h2 {
+    font-size: clamp(1.05rem, 2.2vw, 1.2rem);
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+    color: var(--green);
+  }
+
+  .memos p {
+    margin-top: 3px;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    max-width: 62ch;
+  }
+
+  /* This page runs smaller than the others */
+  .page-head h1 {
+    font-size: clamp(1.8rem, 4.4vw, 2.5rem);
+  }
+  .page-head .lede {
+    font-size: 1rem;
+  }
+  .note {
+    font-size: 0.85rem;
+    max-width: none;
+    width: fit-content;
+  }
+  /* One line wherever the screen is wide enough to hold it */
+  @media (min-width: 720px) {
+    .note {
+      white-space: nowrap;
+    }
+  }
+</style>

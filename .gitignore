@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.astro/
+.DS_Store
+
+# Secrets and raw personal data: never commit
+.env
+.env.*
+private/
+*.fit
+*.FIT
+*.gpx

@@ -1,0 +1,63 @@
+---
+import Base from '../layouts/Base.astro';
+import { principles } from '../data/site';
+
+const pad = (n: number) => String(n).padStart(2, '0');
+---
+
+<Base title="Principles" current="principles">
+  <section class="wrap page-head">
+    <span class="eyebrow">As of {principles.asOf}</span>
+    <h1>Principles<span class="accent">.</span></h1>
+  </section>
+
+  <section class="wrap body">
+    <ol class="principles">
+      {
+        principles.items.map((p, i) => (
+          <li>
+            <span class="mono num">{pad(i + 1)}</span>
+            <span>{p}</span>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+</Base>
+
+<style>
+  .body {
+    padding-bottom: 96px;
+  }
+
+  /* One column at every width; rules run the full width of the page */
+  .principles {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .principles li {
+    display: grid;
+    grid-template-columns: 3.5ch 1fr;
+    gap: 16px;
+    align-items: baseline;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule);
+    font-size: clamp(0.98rem, 1.7vw, 1.1rem);
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+  }
+
+  .principles .num {
+    color: var(--green);
+  }
+
+  /* From tablet width up, every principle stays on a single line */
+  @media (min-width: 720px) {
+    .principles li {
+      white-space: nowrap;
+    }
+  }
+</style>

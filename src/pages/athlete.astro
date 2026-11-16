@@ -1,0 +1,655 @@
+---
+import Base from '../layouts/Base.astro';
+import { wrapped, hm, pastRaces, upcomingRaces, insights, type Race } from '../data/athlete';
+import training from '../data/training.json';
+
+const total = wrapped.sports.reduce((sum, s) => sum + s.minutes, 0);
+const share = (m: number) => Math.round((m / total) * 100);
+
+// Sketch route lines (viewBox 0 0 200 110). A few variants so cards don't look identical.
+const runLines = [
+  'M18 86 C38 28 70 96 100 56 S150 14 182 58',
+  'M18 40 C50 92 78 12 108 50 S150 88 182 30',
+  'M20 70 C44 20 60 60 92 34 S140 92 180 44',
+];
+const triLines = [
+  {
+    swim: 'M34 82 q-16 -18 2 -30 q22 -8 22 12 q-2 16 -24 18',
+    bike: 'M40 80 C56 18 122 8 166 30 C192 46 172 92 122 94 C90 96 60 94 40 80',
+    run: 'M40 80 C70 60 96 72 122 56 S152 50 162 64',
+  },
+  {
+    swim: 'M150 84 q18 -14 6 -30 q-18 -12 -26 6 q-4 16 20 24',
+    bike: 'M150 84 C120 96 50 98 28 70 C12 44 44 12 96 16 C140 20 176 44 150 84',
+    run: 'M150 84 C128 66 112 78 92 60 S62 46 48 58',
+  },
+  {
+    swim: 'M100 90 q-20 -6 -14 -24 q12 -16 28 -4 q10 16 -14 28',
+    bike: 'M100 90 C40 96 14 60 40 30 C70 4 150 8 176 40 C192 70 150 92 100 90',
+    run: 'M100 90 C110 70 136 74 144 54 S120 30 96 40',
+  },
+];
+let runI = 0;
+let triI = 0;
+const drawing = (r: Race) =>
+  r.routes
+    ? r.routes
+    : r.kind === 'run'
+      ? { run: runLines[runI++ % runLines.length] }
+      : r.kind === 'tri'
+        ? triLines[triI++ % triLines.length]
+        : null;
+
+const groups = [
+  { title: 'Raced', races: pastRaces.map((r) => ({ r, d: drawing(r) })), upcoming: false },
+  { title: 'Upcoming', races: upcomingRaces.map((r) => ({ r, d: drawing(r) })), upcoming: true },
+];
+
+// ---- Weekly volume chart, drawn at build time as a static SVG (no script on the page) ----
+const CW = 1000;
+const PL = 40;
+const PR = 36;
+const BAR_TOP = 96;
+const BAR_BOT = 212;
+const LINE_TOP = 16;
+const LINE_BOT = 70;
+const weeksData = training.weeks;
+const step = (CW - PL - PR) / weeksData.length;
+const maxHours = Math.max(...weeksData.map((w) => w.run + w.bike + w.swim));
+const hScale = (BAR_BOT - BAR_TOP) / maxHours;
+const bars = weeksData.map((w, i) => {
+  let y = BAR_BOT;
+  return (['run', 'bike', 'swim'] as const)
+    .filter((k) => w[k] > 0)
+    .map((k) => {
+      const h = w[k] * hScale;
+      y -= h;
+      return { k, x: PL + i * step + 1, y, w: step - 2, h };
+    });
+});
+const t0 = Date.parse(weeksData[0].week);
+const xOfDate = (iso: string) => PL + ((Date.parse(iso) - t0) / (7 * 864e5)) * step + step / 2;
+const secs = training.pace.map((p) => p.sec);
+const fastest = Math.min(...secs);
+const slowest = Math.max(...secs);
+const fmtPace = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+const pacePts = training.pace.map((p) => ({
+  ...p,
+  x: xOfDate(`${p.month}-15`),
+  y: LINE_TOP + ((p.sec - fastest) / (slowest - fastest)) * (LINE_BOT - LINE_TOP),
+}));
+// Break the line wherever a month has too few runs to plot
+const monthIndex = (m: string) => Number(m.slice(0, 4)) * 12 + Number(m.slice(5, 7));
+const paceSegments: (typeof pacePts)[] = [];
+pacePts.forEach((p, i) => {
+  if (i === 0 || monthIndex(p.month) - monthIndex(pacePts[i - 1].month) > 1) paceSegments.push([]);
+  paceSegments[paceSegments.length - 1].push(p);
+});
+const labelled = new Set([pacePts[0].month, pacePts[pacePts.length - 1].month, pacePts.find((p) => p.sec === fastest)!.month]);
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const ticks: { x: number; label: string }[] = [];
+for (let y = 2025, m = 7; y * 12 + m <= 2026 * 12 + 11; m += 2) {
+  if (m > 12) {
+    m -= 12;
+    y += 1;
+  }
+  ticks.push({ x: xOfDate(`${y}-${String(m).padStart(2, '0')}-01`) - step / 2, label: `${monthNames[m - 1]} ${String(y).slice(2)}` });
+}
+---
+
+<Base title="Athlete" current="athlete">
+  <section class="wrap page-head">
+    <span class="eyebrow">03 / Athlete</span>
+    <h1>The year in training<span class="accent">.</span></h1>
+    <p class="lede">
+      You don&rsquo;t become confident by screaming positive affirmations in the mirror, but by having a stack of
+      undeniable proof that you are who you say you are. This is my proof:
+    </p>
+  </section>
+
+  <!-- 2026 Wrapped: one total, split by time -->
+  <section class="section">
+    <div class="wrap">
+      <span class="eyebrow">{wrapped.year} Wrapped</span>
+      <p class="total-label mono">Hours trained</p>
+      <p class="total">{hm(total)}</p>
+
+      <div
+        class="bar"
+        role="img"
+        aria-label={wrapped.sports.map((s) => `${s.label} ${share(s.minutes)} percent of training time`).join(', ')}
+      >
+        {wrapped.sports.map((s) => <span class={s.key} style={`flex-grow:${s.minutes}`} />)}
+      </div>
+
+      <dl class="sports">
+        {
+          wrapped.sports.map((s) => (
+            <div>
+              <dt class="mono">
+                <span class:list={['dot', s.key]} />
+                {s.label} · {share(s.minutes)}%
+              </dt>
+              <dd class="dist">
+                {s.distance} <span class="unit">{s.unit}</span>
+              </dd>
+              <dd class="mono time">{hm(s.minutes)}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+
+  <!-- Races -->
+  <section class="section">
+    <div class="wrap">
+      {
+        groups.map((g, gi) => (
+          <>
+            <div class="group-row">
+              <h3 class="group mono">{g.title}</h3>
+              {gi === 0 && (
+                <ul class="legend mono">
+                  <li><span class="dot swim" />Swim</li>
+                  <li><span class="dot bike" />Bike</li>
+                  <li><span class="dot run" />Run</li>
+                </ul>
+              )}
+            </div>
+            <ul class="cards">
+              {g.races.map(({ r, d }) => (
+                <li class:list={['card', { upcoming: g.upcoming, real: !!r.routes }]}>
+                  <svg viewBox="0 0 200 110" aria-hidden="true">
+                    {d && Object.entries(d).map(([sport, path]) => <path class={sport} d={path} />)}
+                    {r.kind === 'hyrox' && (
+                      <g class="hyrox">
+                        <path class="run" d="M16 55 H184" />
+                        {[...Array(8)].map((_, i) => (
+                          <rect x={27 + i * 20.5} y="47" width="9" height="16" rx="2" />
+                        ))}
+                      </g>
+                    )}
+                  </svg>
+                  <span class="mono format">
+                    {r.format}
+                    {r.date && ` · ${r.date}`}
+                  </span>
+                  <span class="name">{r.name}</span>
+                  <span class:list={['mono result', { tbd: r.result === 'TBD' }]}>{r.result}</span>
+                  {r.ageGroup && (
+                    <span class="mono ag">
+                      {r.ageGroup.estimated ? 'est. top ' : 'Top '}
+                      {r.ageGroup.top}% AG
+                    </span>
+                  )}
+                  {r.note && <span class="mono tag">{r.note}</span>}
+                </li>
+              ))}
+            </ul>
+          </>
+        ))
+      }
+    </div>
+  </section>
+  <!-- Data-driven insights -->
+  <section class="section">
+    <div class="wrap">
+      <span class="eyebrow">Data-driven insights</span>
+
+      <div class="chart-head mono">
+        <span><span class="swatch line"></span>Pace at 150 bpm, min/mi</span>
+        <span><span class="dot run"></span>Run</span>
+        <span><span class="dot bike"></span>Bike</span>
+        <span><span class="dot swim"></span>Swim</span>
+        <span class="unit-note">Hours per week</span>
+      </div>
+      <div class="chart-scroll">
+        <svg class="chart" viewBox={`0 0 ${CW} 236`} role="img" aria-label="Weekly training hours by sport from June 2025 to November 2026, with running pace at 150 beats per minute plotted above">
+          <line class="grid" x1={PL} x2={CW - PR} y1={BAR_BOT} y2={BAR_BOT}></line>
+          <line class="grid faint" x1={PL} x2={CW - PR} y1={BAR_BOT - 10 * hScale} y2={BAR_BOT - 10 * hScale}></line>
+          <text class="axis" x={PL - 6} y={BAR_BOT - 10 * hScale + 4} text-anchor="end">10 h</text>
+          <text class="axis" x={PL - 6} y={BAR_BOT + 4} text-anchor="end">0</text>
+          {bars.map((stack) => stack.map((b) => <rect class={b.k} x={b.x} y={b.y} width={b.w} height={b.h} rx="1" />))}
+          {
+            paceSegments.map((seg) => (
+              <polyline class="pace" points={seg.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')} />
+            ))
+          }
+          {
+            pacePts.map((p) => (
+              <>
+                <circle class="pace-dot" cx={p.x} cy={p.y} r="3.5" />
+                {labelled.has(p.month) && (
+                  <text class="pace-label" x={p.x} y={p.y - 9} text-anchor="middle">
+                    {fmtPace(p.sec)}
+                  </text>
+                )}
+              </>
+            ))
+          }
+          {ticks.map((t) => <text class="axis" x={t.x} y="230">{t.label}</text>)}
+        </svg>
+      </div>
+
+      <ol class="insights">
+        {
+          insights.map((f, i) => (
+            <li>
+              <span class="mono num">0{i + 1}</span>
+              <p class="stat">{f.stat}</p>
+              <p class="mono stat-label">{f.statLabel}</p>
+              <p class="mono tag-line">Thesis</p>
+              <p class="thesis">{f.thesis}</p>
+              <p class="mono tag-line">The numbers</p>
+              <ul class="evidence">
+                {f.evidence.map((e) => <li>{e}</li>)}
+              </ul>
+              <p class="mono tag-line imp">Implication</p>
+              <p class="implication">{f.implication}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+</Base>
+
+<style>
+  /* One colour per discipline, used by the bar, the legend and the route lines */
+  .run {
+    --sport: var(--green);
+  }
+  .bike {
+    --sport: var(--ink);
+  }
+  .swim {
+    --sport: #8fb7a2;
+  }
+
+  /* This page is deliberately tighter than the rest of the site */
+  .page-head {
+    padding-top: 36px;
+    padding-bottom: 32px;
+  }
+  .section {
+    padding: 36px 0 40px;
+  }
+  .page-head .lede {
+    max-width: 68ch;
+  }
+
+  .total-label {
+    margin-top: 6px;
+  }
+
+  .total {
+    font-family: var(--mono);
+    font-size: clamp(1.9rem, 5.5vw, 2.6rem);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+    color: var(--green);
+  }
+
+  .bar {
+    display: flex;
+    gap: 3px;
+    height: 12px;
+    margin: 16px 0 0;
+  }
+  .bar span {
+    flex-basis: 0;
+    background: var(--sport);
+    border-radius: 3px;
+  }
+
+  .sports {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 12px 0 0;
+  }
+  .sports dt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .sports dd {
+    margin: 0;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--sport);
+    flex: none;
+  }
+
+  .dist {
+    font-family: var(--mono);
+    font-size: clamp(1.15rem, 3.6vw, 1.7rem);
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+  }
+  .unit {
+    font-size: 0.55em;
+    letter-spacing: 0;
+    color: var(--ink-soft);
+  }
+  .time {
+    margin-top: 2px;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+
+  /* Races */
+  .races-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.68rem;
+  }
+  .legend li {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .ph-line {
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+  }
+
+  .group-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 22px 0 10px;
+  }
+  .group-row:first-of-type {
+    margin-top: 0;
+  }
+  .group {
+    margin: 0;
+    font-weight: 400;
+    color: var(--green);
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    background: var(--cream-deep);
+  }
+  .card.upcoming {
+    background: none;
+    border: 1.5px dashed var(--green);
+  }
+
+  .card svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 84px;
+    margin-bottom: 6px;
+  }
+  .card path {
+    fill: none;
+    stroke: var(--sport);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .card path.bike {
+    stroke-width: 2.5;
+  }
+  .card.upcoming path {
+    stroke-dasharray: 2 7;
+  }
+  /* Real course outlines are detailed, so they get a thinner solid line */
+  .card.real path {
+    stroke-width: 1.8;
+    stroke-dasharray: none;
+  }
+  .hyrox rect {
+    fill: var(--cream-deep);
+    stroke: var(--ink);
+    stroke-width: 2;
+  }
+
+  .format {
+    font-size: 0.66rem;
+  }
+  .name {
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+  }
+  /* Pushed to the bottom of the card, so times and percentages line up across a row
+     even when a race name wraps onto two lines */
+  .result {
+    margin-top: auto;
+    padding-top: 4px;
+    font-size: clamp(1rem, 4vw, 1.3rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    text-transform: none;
+    color: var(--green);
+  }
+  .result.tbd {
+    color: var(--ink-faint);
+  }
+  .ag {
+    font-size: 0.64rem;
+    color: var(--ink);
+  }
+
+  @media (min-width: 720px) {
+    .cards {
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    }
+  }
+
+  .tag {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 0.62rem;
+    padding: 2px 8px;
+    border: 1px solid var(--ink-soft);
+    border-radius: 999px;
+    background: var(--cream);
+  }
+
+  /* Data-driven insights */
+  .chart-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 18px;
+    margin-top: 4px;
+    font-size: 0.66rem;
+  }
+  .chart-head span {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .swatch.line {
+    width: 16px;
+    height: 2px;
+    background: var(--green-bright);
+  }
+  .unit-note {
+    margin-left: auto;
+    color: var(--ink-faint);
+  }
+
+  /* On phones the chart keeps a readable width and scrolls sideways */
+  .chart-scroll {
+    overflow-x: auto;
+    margin-top: 8px;
+  }
+  .chart {
+    display: block;
+    width: 100%;
+    min-width: 680px;
+    height: auto;
+  }
+  .chart rect {
+    fill: var(--sport);
+  }
+  .grid {
+    stroke: var(--ink-soft);
+    stroke-width: 1;
+  }
+  .grid.faint {
+    stroke: var(--rule);
+    stroke-dasharray: 3 4;
+  }
+  .axis {
+    font-family: var(--mono);
+    font-size: 11px;
+    fill: var(--ink-faint);
+  }
+  .pace {
+    fill: none;
+    stroke: var(--green-bright);
+    stroke-width: 2;
+    stroke-linejoin: round;
+  }
+  .pace-dot {
+    fill: var(--cream);
+    stroke: var(--green-bright);
+    stroke-width: 2;
+  }
+  .pace-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    fill: var(--green);
+  }
+
+  .insights {
+    display: grid;
+    gap: 12px;
+    list-style: none;
+    margin: 22px 0 0;
+    padding: 0;
+  }
+  @media (min-width: 860px) {
+    .insights {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    /* Each card shares the same nine rows, so Thesis, The numbers and Implication
+       line up across all three cards whatever the text length. */
+    .insights > li {
+      display: grid;
+      grid-row: span 9;
+      grid-template-rows: subgrid;
+      row-gap: 0;
+    }
+  }
+  .insights > li {
+    padding: 14px 16px 16px;
+    border: 1px solid var(--rule);
+    border-top: 2px solid var(--green);
+    border-radius: 0 0 12px 12px;
+    background: var(--cream-deep);
+  }
+  .insights .num {
+    color: var(--green);
+  }
+  .insights .stat {
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 1.7rem;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    color: var(--green);
+  }
+  .stat-label {
+    font-size: 0.64rem;
+    margin-top: 2px;
+  }
+  .tag-line {
+    margin-top: 14px;
+    font-size: 0.62rem;
+    color: var(--ink-faint);
+  }
+  .tag-line.imp {
+    color: var(--green);
+  }
+  .thesis,
+  .implication {
+    margin-top: 3px;
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+  .thesis {
+    color: var(--ink);
+  }
+  .evidence {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+  }
+  .evidence li {
+    position: relative;
+    padding-left: 14px;
+    margin-top: 3px;
+  }
+  .evidence li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.72em;
+    width: 7px;
+    height: 1px;
+    background: var(--green);
+  }
+  .implication {
+    font-weight: 500;
+  }
+  .fine {
+    margin-top: 14px;
+    font-size: 0.8rem;
+    color: var(--ink-faint);
+  }
+</style>

@@ -1,0 +1,194 @@
+---
+import { Image } from 'astro:assets';
+import Base from '../layouts/Base.astro';
+import PulseLine from '../components/PulseLine.astro';
+import portrait from '../assets/tyler.png';
+import { bio, email, url } from '../data/site';
+---
+
+<Base>
+  <!-- Hero: greeting + portrait, then the pulse line and four pillars -->
+  <section class="hero wrap">
+    <div class="intro">
+      <div class="portrait">
+        <Image
+          src={portrait}
+          alt="Tyler Martin"
+          widths={[200, 320, 480, 640]}
+          sizes="(min-width: 860px) 230px, 96px"
+          format="webp"
+          quality={82}
+          loading="eager"
+        />
+      </div>
+      <h1>Hi, I’m <span class="accent">Tyler.</span></h1>
+      <p class="lede">{bio.intro}</p>
+    </div>
+    <PulseLine />
+  </section>
+
+  <!-- About -->
+  <section class="section about" id="about">
+    <div class="wrap split">
+      <div>
+        <h2>About <span class="accent">me</span></h2>
+      </div>
+      <div class="about-copy">
+        {bio.about.map((p) => <p>{p}</p>)}
+        <div class="links">
+          <a class="btn" href={url('/experience/')}>Experience <span aria-hidden="true">→</span></a>
+          <a class="btn" href={url('/principles/')}>Principles <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact -->
+  <section class="contact" id="contact">
+    <div class="wrap contact-row">
+      <span class="eyebrow">Contact</span>
+      <p>Say hello<span class="accent">.</span> <a class="mail" href={`mailto:${email}`}>{email}</a></p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  /* The hero is kept short on purpose: greeting, pulse line and all four pillars
+     should be visible without scrolling on a laptop and on a phone. */
+  .hero {
+    padding-top: 28px;
+    padding-bottom: 72px;
+  }
+
+  /* Phone: small portrait beside the greeting, intro text underneath */
+  .intro {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    grid-template-areas:
+      'photo title'
+      'lede lede';
+    align-items: center;
+    column-gap: 16px;
+    row-gap: 16px;
+  }
+
+  h1 {
+    grid-area: title;
+    font-size: clamp(2.1rem, 5vw, 3.6rem);
+  }
+
+  .lede {
+    grid-area: lede;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    max-width: 52ch;
+  }
+
+  /* The cut-out has no background of its own. Its bottom and right edges are where
+     the original photo was cropped, so they fade out instead of ending in a hard line. */
+  .portrait {
+    grid-area: photo;
+    margin-left: -6px;
+  }
+  .portrait img {
+    display: block;
+    width: 100%;
+    height: auto;
+    -webkit-mask-image: linear-gradient(to bottom, #000 78%, transparent 100%),
+      linear-gradient(to right, #000 86%, transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(to bottom, #000 78%, transparent 100%),
+      linear-gradient(to right, #000 86%, transparent 100%);
+    mask-composite: intersect;
+  }
+
+  /* Laptop and up: text on the left, portrait on the right */
+  @media (min-width: 860px) {
+    .hero {
+      padding-top: 64px;
+      padding-bottom: 120px;
+    }
+    .intro {
+      /* Text takes only the width it needs; the portrait is centred in the space left over */
+      grid-template-columns: minmax(0, auto) 1fr;
+      grid-template-areas:
+        'title photo'
+        'lede photo';
+      column-gap: 0;
+      row-gap: 22px;
+    }
+    h1 {
+      align-self: end;
+    }
+    .lede {
+      align-self: start;
+      font-size: 1.12rem;
+      line-height: 1.55;
+    }
+    .portrait {
+      margin-left: 0;
+      width: 230px;
+      justify-self: center;
+    }
+  }
+
+  .about {
+    padding: 96px 0;
+  }
+  @media (min-width: 860px) {
+    .about {
+      padding: 140px 0;
+    }
+  }
+
+  .accent {
+    color: var(--green);
+  }
+
+  .split {
+    display: grid;
+    gap: 28px;
+  }
+  @media (min-width: 860px) {
+    .split {
+      grid-template-columns: 1fr 1.4fr;
+      gap: 64px;
+    }
+  }
+
+  .about-copy p {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: var(--ink-soft);
+    max-width: 60ch;
+  }
+  .about-copy p + p {
+    margin-top: 24px;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 40px;
+  }
+
+  /* Contact is deliberately small: one quiet line above the footer */
+  .contact {
+    border-top: 1px solid var(--rule);
+    padding: 44px 0 48px;
+  }
+  .contact-row .eyebrow {
+    margin-bottom: 6px;
+  }
+  .contact-row p {
+    font-size: 1rem;
+    color: var(--ink-soft);
+  }
+  .mail {
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    margin-left: 6px;
+    overflow-wrap: anywhere;
+  }
+</style>
